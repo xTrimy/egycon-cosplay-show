@@ -1,0 +1,40 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "egycon-cosplay-show",
+  "version": "0.1.0",
+  "identifier": "com.xtrimy.egycon-cosplay-show",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Egycon Cosplay Show",
+        "decorations": false,
+        "resizable": false,
+        "visible": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; connect-src 'self' https://mediafile.localhost http://mediafile.localhost; img-src 'self' asset: https://asset.localhost https://mediafile.localhost http://mediafile.localhost data:; media-src 'self' asset: https://asset.localhost https://mediafile.localhost http://mediafile.localhost mediafile:; script-src 'self'; style-src 'self' 'unsafe-inline'",
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$APPDATA/com.xtrimy.egycon-cosplay-show/**"]
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}
