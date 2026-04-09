@@ -183,10 +183,14 @@ fn get_cosplayer_info(number: u32, app: tauri::AppHandle) -> Result<CosplayerInf
     };
 
     let media_dir = base.join("media");
-    let video_path = media_dir.join(format!("{number}.mp4"));
+    let video_exts = ["mp4", "webm", "mov", "avi"];
+    let video_path = video_exts
+        .iter()
+        .map(|ext| media_dir.join(format!("{number}.{ext}")))
+        .find(|p| p.exists());
     let audio_path = media_dir.join(format!("{number}.mp3"));
 
-    if video_path.exists() {
+    if let Some(video_path) = video_path {
         Ok(CosplayerInfo {
             number,
             name,
