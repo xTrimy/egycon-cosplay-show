@@ -54,29 +54,12 @@ export function IdleVideoPlayer({ src, onEnded }: IdleVideoPlayerProps) {
     }
 
     let cancelled = false;
+    let endCheckListener: (() => void) | null = null;
 
     // Load the incoming video invisibly so canplay fires when data is ready
     incoming.src = src;
     incoming.load();
     incoming.style.opacity = '0';
-
-    // Fire onEnded VIDEO_CROSSFADE_MS before the video ends — OR when the video
-    // reaches MAX_IDLE_SECONDS — whichever comes first.
-    let earlyTriggered = false;
-    const tryEarlyEnd = () => {
-      if (earlyTriggered || !isFinite(incoming.duration)) return;
-      const remaining = incoming.duration - incoming.currentTime;
-      const cappedRemaining = Math.min(incoming.duration, MAX_IDLE_SECONDS) - incoming.currentTime;
-      if (remaining <= VIDEO_CROSSFADE_MS / 1000 || cappedRemaining <= VIDEO_CROSSFADE_MS / 1000) {
-        earlyTriggered = true;
-        incoming.removeEventListener('timeupdate', tryEarlyEnd);
-        incoming.removeEventListener('ended', tryEarlyEnd);
-        onEndedRef.current?.();
-      }
-    };
-    incoming.addEventListener('timeupdate', tryEarlyEnd);
-    // Fallback for clips shorter than VIDEO_CROSSFADE_MS
-    incoming.addEventListener('ended', tryEarlyEnd);
 
     const startCrossfade = () => {
       incoming.removeEventListener('canplay', startCrossfade);
@@ -94,15 +77,49 @@ export function IdleVideoPlayer({ src, onEnded }: IdleVideoPlayerProps) {
           outgoing.load();
         });
       }
+
+      // Duration is available now. Loop short videos so they fill MAX_IDLE_SECONDS.
+      const duration = incoming.duration;
+      const isShort = isFinite(duration) && duration < MAX_IDLE_SECONDS;
+      if (isShort) incoming.loop = true;
+
+      // Fire onEnded once MAX_IDLE_SECONDS of wall-clock playtime has elapsed
+      // (VIDEO_CROSSFADE_MS early so the crossfade overlaps the tail).
+      // For long videos also catch the natural near-end as a fallback.
+      const playStartMs = performance.now();
+      const triggerMs = (MAX_IDLE_SECONDS - VIDEO_CROSSFADE_MS / 1000) * 1000;
+
+      let triggered = false;
+      const checkEnd = () => {
+        if (triggered) return;
+        const elapsed = performance.now() - playStartMs;
+        const nearNaturalEnd =
+          !incoming.loop &&
+          isFinite(incoming.duration) &&
+          incoming.duration - incoming.currentTime <= VIDEO_CROSSFADE_MS / 1000;
+        if (elapsed >= triggerMs || nearNaturalEnd) {
+          triggered = true;
+          incoming.loop = false;
+          incoming.removeEventListener('timeupdate', checkEnd);
+          incoming.removeEventListener('ended', checkEnd);
+          onEndedRef.current?.();
+        }
+      };
+      endCheckListener = checkEnd;
+      incoming.addEventListener('timeupdate', checkEnd);
+      incoming.addEventListener('ended', checkEnd); // fallback for very short clips
     };
 
     incoming.addEventListener('canplay', startCrossfade);
 
     return () => {
       cancelled = true;
+      incoming.loop = false;
       incoming.removeEventListener('canplay', startCrossfade);
-      incoming.removeEventListener('timeupdate', tryEarlyEnd);
-      incoming.removeEventListener('ended', tryEarlyEnd);
+      if (endCheckListener) {
+        incoming.removeEventListener('timeupdate', endCheckListener);
+        incoming.removeEventListener('ended', endCheckListener);
+      }
     };
   }, [src, getActive, getInactive]);
 
