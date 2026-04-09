@@ -70,6 +70,7 @@ export function IdleVideoPlayer({ src, onEnded }: IdleVideoPlayerProps) {
       fadeOpacity(incoming as FadableElement, 0, 1, VIDEO_CROSSFADE_MS);
 
       if (outgoing) {
+        outgoing.loop = false; // stop any looping now that the replacement is ready
         const from = parseFloat(outgoing.style.opacity || '0');
         fadeOpacity(outgoing as FadableElement, from, 0, VIDEO_CROSSFADE_MS, () => {
           outgoing.pause();
@@ -99,7 +100,9 @@ export function IdleVideoPlayer({ src, onEnded }: IdleVideoPlayerProps) {
           incoming.duration - incoming.currentTime <= VIDEO_CROSSFADE_MS / 1000;
         if (elapsed >= triggerMs || nearNaturalEnd) {
           triggered = true;
-          incoming.loop = false;
+          // Do NOT set loop=false here — the video must keep looping until the
+          // replacement is buffered and startCrossfade disables it (above).
+          // Only remove our own listeners so we don't double-trigger.
           incoming.removeEventListener('timeupdate', checkEnd);
           incoming.removeEventListener('ended', checkEnd);
           onEndedRef.current?.();
