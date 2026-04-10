@@ -135,9 +135,11 @@ fn bootstrap_data_dir(base: &PathBuf) -> std::io::Result<()> {
                                Example: { \"1\": \"Ahmed Mohamed\", \"2\": \"Sara Ali\" }\r\n\
              \r\n\
              config.json       App settings.\r\n\
-                               stageMonitorIndex: 0 = primary, 1 = second monitor, etc.\r\n\                               forceResolution: null for fullscreen (default).\r\n\
+                               stageMonitorIndex: 0 = primary, 1 = second monitor, etc.\r\n\
+                               forceResolution: null for fullscreen (default).\r\n\
                                Set to { \"width\": 1920, \"height\": 1080 } to force\r\n\
-                               a specific window size (useful for screen capture).\r\n\             \r\n\
+                               a specific window size (useful for screen capture).\r\n\
+             \r\n\
              media\\            Place cosplayer media files here.\r\n\
                                Naming: {number}.mp4 for video, {number}.mp3 for audio.\r\n\
                                Example: 1.mp4, 2.mp3, 3.mp4\r\n\
