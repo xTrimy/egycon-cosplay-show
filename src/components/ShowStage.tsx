@@ -19,10 +19,27 @@ interface MonitorInfo {
   scaleFactor: number;
 }
 
+interface CosplayerInfoLayout {
+  top: string;
+  left: string;
+  width: string;
+  numberFontSize: string;
+  nameFontSize: string;
+}
+
+const defaultCosplayerInfoLayout: CosplayerInfoLayout = {
+  top: '20%',
+  left: '50%',
+  width: '100%',
+  numberFontSize: 'clamp(5rem,6vw,4rem)',
+  nameFontSize: 'clamp(4rem,6vw,4rem)',
+};
+
 export function ShowStage() {
   const { cosplayer, loading, resolve, clear } = useCosplayer();
-  const { idleVideoSrc, onIdleEnded } = useIdleVideo();
+  const { idleVideoSrc, nextIdleVideoSrc, idleVideoToken, onIdleEnded } = useIdleVideo();
   const [stageMonitor, setStageMonitor] = useState<MonitorInfo | null>(null);
+  const [cosplayerInfoLayout, setCosplayerInfoLayout] = useState<CosplayerInfoLayout>(defaultCosplayerInfoLayout);
   const [mediaPaused, setMediaPaused] = useState(false);
   const [lastCosplayerInfo, setLastCosplayerInfo] = useState<{ number: number; name: string } | null>(null);
 
@@ -104,6 +121,10 @@ export function ShowStage() {
     invoke<MonitorInfo | null>('get_stage_monitor_info')
       .then((info) => setStageMonitor(info))
       .catch(() => {});
+
+    invoke<CosplayerInfoLayout>('get_cosplayer_info_layout')
+      .then((layout) => setCosplayerInfoLayout(layout))
+      .catch(() => {});
   }, []);
 
   // Handle audio-only cosplayer with crossfade in/out
@@ -161,7 +182,12 @@ export function ShowStage() {
         {lastCosplayerInfo && (
           <motion.div
             key={lastCosplayerInfo.number}
-            className="absolute top-[20%] left-1/2 -translate-x-1/2 z-200 flex flex-col items-center gap-[0.3em] pointer-events-none text-center w-full"
+            className="absolute z-200 flex flex-col items-center gap-[0.3em] pointer-events-none text-center -translate-x-1/2"
+            style={{
+              top: cosplayerInfoLayout.top,
+              left: cosplayerInfoLayout.left,
+              width: cosplayerInfoLayout.width,
+            }}
             initial={{ opacity: 0, y: 60, scale: 0.6, rotate: -4 }}
             animate={{ opacity: 1, y: 0, scale: 1, rotate: 0 }}
             exit={{ opacity: 0, y: -40, scale: 0.7, rotate: 3 }}
@@ -172,7 +198,12 @@ export function ShowStage() {
               rotate: { type: 'spring', stiffness: 400, damping: 20 },
             }}
           >
-            <CosplayerInfoDisplay number={lastCosplayerInfo.number} name={lastCosplayerInfo.name} />
+            <CosplayerInfoDisplay
+              number={lastCosplayerInfo.number}
+              name={lastCosplayerInfo.name}
+              numberFontSize={cosplayerInfoLayout.numberFontSize}
+              nameFontSize={cosplayerInfoLayout.nameFontSize}
+            />
           </motion.div>
         )}
       </AnimatePresence>
@@ -186,6 +217,8 @@ export function ShowStage() {
              Visible whenever no cosplayer video is overlaying it. */}
         <IdleVideoPlayer
           src={idleVideoSrc}
+          nextSrc={nextIdleVideoSrc}
+          playToken={idleVideoToken}
           onEnded={onIdleEnded}
         />
 

@@ -75,6 +75,16 @@ pub struct MonitorInfo {
     pub scale_factor: f64,
 }
 
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CosplayerInfoLayout {
+    pub top: String,
+    pub left: String,
+    pub width: String,
+    pub number_font_size: String,
+    pub name_font_size: String,
+}
+
 fn app_data_dir(app: &tauri::AppHandle) -> PathBuf {
     app.path()
         .app_data_dir()
@@ -95,7 +105,14 @@ fn bootstrap_data_dir(base: &PathBuf) -> std::io::Result<()> {
     if !config_path.exists() {
         let default_config = serde_json::json!({
             "stageMonitorIndex": 0,
-            "forceResolution": null
+            "forceResolution": null,
+            "cosplayerInfo": {
+                "top": "20%",
+                "left": "50%",
+                "width": "100%",
+                "numberFontSize": "clamp(5rem,6vw,4rem)",
+                "nameFontSize": "clamp(4rem,6vw,4rem)"
+            }
         });
         std::fs::write(
             &config_path,
@@ -180,6 +197,50 @@ fn read_force_resolution(base: &PathBuf) -> Option<(u32, u32)> {
     let h = obj.get("height")?.as_u64()? as u32;
     if w == 0 || h == 0 { return None; }
     Some((w, h))
+}
+
+fn read_cosplayer_info_layout(base: &PathBuf) -> CosplayerInfoLayout {
+    let defaults = CosplayerInfoLayout {
+        top: "20%".to_string(),
+        left: "50%".to_string(),
+        width: "100%".to_string(),
+        number_font_size: "clamp(5rem,6vw,4rem)".to_string(),
+        name_font_size: "clamp(4rem,6vw,4rem)".to_string(),
+    };
+
+    let config_path = base.join("config.json");
+    let raw = match std::fs::read_to_string(&config_path) {
+        Ok(raw) => raw,
+        Err(_) => return defaults,
+    };
+    let value: serde_json::Value = match serde_json::from_str(&raw) {
+        Ok(value) => value,
+        Err(_) => return defaults,
+    };
+    let Some(obj) = value.get("cosplayerInfo").and_then(|v| v.as_object()) else {
+        return defaults;
+    };
+
+    let read_string = |key: &str, fallback: &str| {
+        obj.get(key)
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .filter(|s| !s.trim().is_empty())
+            .unwrap_or_else(|| fallback.to_string())
+    };
+
+    CosplayerInfoLayout {
+        top: read_string("top", &defaults.top),
+        left: read_string("left", &defaults.left),
+        width: read_string("width", &defaults.width),
+        number_font_size: read_string("numberFontSize", &defaults.number_font_size),
+        name_font_size: read_string("nameFontSize", &defaults.name_font_size),
+    }
+}
+
+#[tauri::command]
+fn get_cosplayer_info_layout(app: tauri::AppHandle) -> CosplayerInfoLayout {
+    read_cosplayer_info_layout(&app_data_dir(&app))
 }
 
 #[tauri::command]
@@ -496,6 +557,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_cosplayer_info,
+            get_cosplayer_info_layout,
             get_frame_path,
             get_idle_videos,
             get_idle_music,
