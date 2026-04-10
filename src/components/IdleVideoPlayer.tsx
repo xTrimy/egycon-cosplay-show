@@ -79,38 +79,46 @@ export function IdleVideoPlayer({ src, onEnded }: IdleVideoPlayerProps) {
         });
       }
 
-      // Duration is available now. Loop short videos so they fill MAX_IDLE_SECONDS.
-      const duration = incoming.duration;
-      const isShort = isFinite(duration) && duration < MAX_IDLE_SECONDS;
-      if (isShort) incoming.loop = true;
+      // Loop short videos so they fill MAX_IDLE_SECONDS.
+      // duration may be Infinity (common for WebM) at canplay time, so also
+      // listen for durationchange which fires once the real value is known.
+      const applyLoopIfShort = () => {
+        if (isFinite(incoming.duration) && incoming.duration < MAX_IDLE_SECONDS) {
+          incoming.loop = true;
+        }
+      };
+      applyLoopIfShort();
+      const handleDurationChange = () => { applyLoopIfShort(); };
+      incoming.addEventListener('durationchange', handleDurationChange);
 
       // Fire onEnded once MAX_IDLE_SECONDS of wall-clock playtime has elapsed
       // (VIDEO_CROSSFADE_MS early so the crossfade overlaps the tail).
-      // For long videos also catch the natural near-end as a fallback.
       const playStartMs = performance.now();
       const triggerMs = (MAX_IDLE_SECONDS - VIDEO_CROSSFADE_MS / 1000) * 1000;
 
       let triggered = false;
+      const trigger = () => {
+        if (triggered) return;
+        triggered = true;
+        incoming.removeEventListener('timeupdate', checkEnd);
+        incoming.removeEventListener('ended', handleEnded);
+        incoming.removeEventListener('durationchange', handleDurationChange);
+        onEndedRef.current?.();
+      };
+
+      // Wall-clock check via timeupdate — handles looping short videos.
       const checkEnd = () => {
         if (triggered) return;
-        const elapsed = performance.now() - playStartMs;
-        const nearNaturalEnd =
-          !incoming.loop &&
-          isFinite(incoming.duration) &&
-          incoming.duration - incoming.currentTime <= VIDEO_CROSSFADE_MS / 1000;
-        if (elapsed >= triggerMs || nearNaturalEnd) {
-          triggered = true;
-          // Do NOT set loop=false here — the video must keep looping until the
-          // replacement is buffered and startCrossfade disables it (above).
-          // Only remove our own listeners so we don't double-trigger.
-          incoming.removeEventListener('timeupdate', checkEnd);
-          incoming.removeEventListener('ended', checkEnd);
-          onEndedRef.current?.();
-        }
+        if (performance.now() - playStartMs >= triggerMs) trigger();
       };
+
+      // Separate ended handler — always triggers when the video finishes
+      // naturally, regardless of duration value (works for WebM Infinity too).
+      const handleEnded = () => trigger();
+
       endCheckListener = checkEnd;
       incoming.addEventListener('timeupdate', checkEnd);
-      incoming.addEventListener('ended', checkEnd); // fallback for very short clips
+      incoming.addEventListener('ended', handleEnded);
     };
 
     incoming.addEventListener('canplay', startCrossfade);

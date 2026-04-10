@@ -94,7 +94,8 @@ fn bootstrap_data_dir(base: &PathBuf) -> std::io::Result<()> {
     let config_path = base.join("config.json");
     if !config_path.exists() {
         let default_config = serde_json::json!({
-            "stageMonitorIndex": 0
+            "stageMonitorIndex": 0,
+            "forceResolution": null
         });
         std::fs::write(
             &config_path,
@@ -134,8 +135,9 @@ fn bootstrap_data_dir(base: &PathBuf) -> std::io::Result<()> {
                                Example: { \"1\": \"Ahmed Mohamed\", \"2\": \"Sara Ali\" }\r\n\
              \r\n\
              config.json       App settings.\r\n\
-                               stageMonitorIndex: 0 = primary, 1 = second monitor, etc.\r\n\
-             \r\n\
+                               stageMonitorIndex: 0 = primary, 1 = second monitor, etc.\r\n\                               forceResolution: null for fullscreen (default).\r\n\
+                               Set to { \"width\": 1920, \"height\": 1080 } to force\r\n\
+                               a specific window size (useful for screen capture).\r\n\             \r\n\
              media\\            Place cosplayer media files here.\r\n\
                                Naming: {number}.mp4 for video, {number}.mp3 for audio.\r\n\
                                Example: 1.mp4, 2.mp3, 3.mp4\r\n\
@@ -162,6 +164,20 @@ fn read_stage_monitor_index(base: &PathBuf) -> usize {
         .and_then(|v| v.get("stageMonitorIndex")?.as_u64())
         .map(|n| n as usize)
         .unwrap_or(0)
+}
+
+/// Reads `forceResolution` from `config.json`. Returns `Some((width, height))`
+/// if the key is present and has valid integer width/height fields; `None`
+/// otherwise (including when the key is `null` or absent).
+fn read_force_resolution(base: &PathBuf) -> Option<(u32, u32)> {
+    let config_path = base.join("config.json");
+    let raw = std::fs::read_to_string(&config_path).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    let obj = v.get("forceResolution")?.as_object()?;
+    let w = obj.get("width")?.as_u64()? as u32;
+    let h = obj.get("height")?.as_u64()? as u32;
+    if w == 0 || h == 0 { return None; }
+    Some((w, h))
 }
 
 #[tauri::command]
@@ -278,6 +294,7 @@ fn get_idle_music(app: tauri::AppHandle) -> Vec<String> {
 fn get_stage_monitor_info(app: tauri::AppHandle) -> Option<MonitorInfo> {
     let base = app_data_dir(&app);
     let index = read_stage_monitor_index(&base);
+    let force_res = read_force_resolution(&base);
     let window = app.get_webview_window("main")?;
     let monitors = window.available_monitors().ok()?;
     let (resolved_index, monitor) = monitors
@@ -289,11 +306,14 @@ fn get_stage_monitor_info(app: tauri::AppHandle) -> Option<MonitorInfo> {
         .name()
         .map(|s| s.to_string())
         .unwrap_or_else(|| "Unknown".to_string());
+    // When forceResolution is set the window runs at that size, so report
+    // those dimensions for frame.png creation guidance.
+    let (width, height) = force_res.unwrap_or((monitor.size().width, monitor.size().height));
     Some(MonitorInfo {
         index: resolved_index,
         name,
-        width: monitor.size().width,
-        height: monitor.size().height,
+        width,
+        height,
         scale_factor: monitor.scale_factor(),
     })
 }
@@ -432,24 +452,42 @@ pub fn run() {
             bootstrap_data_dir(&base).expect("Failed to initialize data directory");
 
             let monitor_index = read_stage_monitor_index(&base);
+            let force_res = read_force_resolution(&base);
 
             let window = app
                 .get_webview_window("main")
                 .expect("main window not found");
 
-            // Position the window on the target monitor BEFORE fullscreen so
-            // the OS activates fullscreen on the correct display.
             let monitors = window.available_monitors().unwrap_or_default();
             let target = monitors.get(monitor_index).or_else(|| monitors.first());
 
-            if let Some(monitor) = target {
-                let pos = monitor.position();
+            if let Some((width, height)) = force_res {
+                // Forced resolution mode: exact size, centered on target monitor,
+                // no fullscreen. Useful for screen-capture software.
+                if let Some(monitor) = target {
+                    let pos = monitor.position();
+                    let mon_w = monitor.size().width as i32;
+                    let mon_h = monitor.size().height as i32;
+                    let x = pos.x + (mon_w - width as i32) / 2;
+                    let y = pos.y + (mon_h - height as i32) / 2;
+                    window
+                        .set_position(tauri::PhysicalPosition::new(x, y))
+                        .ok();
+                }
                 window
-                    .set_position(tauri::PhysicalPosition::new(pos.x, pos.y))
+                    .set_size(tauri::PhysicalSize::new(width, height))
                     .ok();
+            } else {
+                // Default: fullscreen on the target monitor.
+                if let Some(monitor) = target {
+                    let pos = monitor.position();
+                    window
+                        .set_position(tauri::PhysicalPosition::new(pos.x, pos.y))
+                        .ok();
+                }
+                window.set_fullscreen(true).ok();
             }
 
-            window.set_fullscreen(true).ok();
             window.show().ok();
 
             Ok(())
