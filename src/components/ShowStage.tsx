@@ -161,7 +161,7 @@ export function ShowStage() {
         {lastCosplayerInfo && (
           <motion.div
             key={lastCosplayerInfo.number}
-            className="absolute top-[20%] left-1/2 -translate-x-1/2 z-200 flex flex-col items-center gap-[0.3em] pointer-events-none text-center w-full"
+            className="absolute top-[19%] left-1/2 -translate-x-1/2 z-200 flex flex-col items-center gap-[0.3em] pointer-events-none text-center w-full"
             initial={{ opacity: 0, y: 60, scale: 0.6, rotate: -4 }}
             animate={{ opacity: 1, y: 0, scale: 1, rotate: 0 }}
             exit={{ opacity: 0, y: -40, scale: 0.7, rotate: 3 }}

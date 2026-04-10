@@ -8,7 +8,7 @@ export type FadableElement = HTMLElement & { _opacityFadeId?: number };
 export const CROSSFADE_MS = 3000;
 export const VIDEO_CROSSFADE_MS = 1000;
 // Idle videos longer than this will be cut off early (crossfade starts at MAX_IDLE_SECONDS)
-export const MAX_IDLE_SECONDS = 120; // 2 minutes
+export const MAX_IDLE_SECONDS = 60; // 1 minute
 
 /**
  * Linearly ramps `el.volume` from `from` to `to` over `durationMs`.
